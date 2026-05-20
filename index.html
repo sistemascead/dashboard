@@ -825,17 +825,15 @@ function esPreguntaSatisfaccion(k) {
 
 function esRespuestaPositiva(v, maxEscala) {
   const s = (v||'').toString().trim().toLowerCase();
-  if (!s || s === 'nan' || s === 'n/a') return null;
+  if (!s || s === 'nan' || s === 'n/a' || s === 'no responde' || s === 'no responde') return null;
   const n = parseFloat(s.replace(',','.'));
   if (!isNaN(n) && s.match(/^[\d.,]+$/)) {
-    // Escala numérica: positivo si >= 80% del máximo
     return n >= maxEscala * 0.8;
   }
-  // Texto: palabras positivas
-  const pos = ['muy satisfecho','satisfecho','excelente','muy bueno','bueno','siempre','totalmente','completamente','de acuerdo','muy de acuerdo','óptimo','optimo','5 -','4 -','5-','4-'];
-  const neg = ['insatisfecho','malo','nunca','pésimo','pesimo','deficiente','en desacuerdo','muy en desacuerdo'];
-  if (pos.some(w => s.includes(w))) return true;
-  if (neg.some(w => s.includes(w))) return false;
+  const pos = ['muy buena','muy bueno','muy satisfecho','satisfecho','excelente','buena','bueno','siempre','totalmente','completamente','de acuerdo','muy de acuerdo','óptimo','optimo','5 -','4 -','5-','4-'];
+  const neg = ['muy mala','muy malo','mala','malo','regular','insatisfecho','nunca','pésimo','pesimo','deficiente','en desacuerdo'];
+  if (pos.some(w => s === w || s.startsWith(w+' ') || s.endsWith(' '+w))) return true;
+  if (neg.some(w => s === w || s.startsWith(w+' ') || s.endsWith(' '+w))) return false;
   return null;
 }
 
