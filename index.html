@@ -762,7 +762,8 @@ function normalizarFila(row) {
     n[lk] = typeof row[k] === 'string' ? row[k].trim() : String(row[k] ?? '');
   }
   const fechaKey = Object.keys(n).find(k =>
-    /^fecha$/i.test(k) || /start time/i.test(k) || /completion time/i.test(k) || /^date$/i.test(k)
+    /^fecha$/i.test(k) || /start time/i.test(k) || /completion time/i.test(k) || /^date$/i.test(k) ||
+    /^hora de inicio$/i.test(k) || /^hora de finalizaci[oó]n$/i.test(k)
   );
   if (fechaKey && n[fechaKey]) {
     const v = n[fechaKey];
@@ -816,14 +817,44 @@ function aplicarFiltros() {
 }
 
 // ── KPIs ───────────────────────────────────────────────────────
+function esPreguntaSatisfaccion(k) {
+  const t = k.toLowerCase();
+  return k.trim().startsWith('¿') ||
+    /satisf|calific|evalua|valora|puntua|opinion|atencion|servicio|trato|amabilidad|rapidez|eficaci/i.test(t);
+}
+
+function esRespuestaPositiva(v, maxEscala) {
+  const s = (v||'').toString().trim().toLowerCase();
+  if (!s || s === 'nan' || s === 'n/a') return null;
+  const n = parseFloat(s.replace(',','.'));
+  if (!isNaN(n) && s.match(/^[\d.,]+$/)) {
+    // Escala numérica: positivo si >= 80% del máximo
+    return n >= maxEscala * 0.8;
+  }
+  // Texto: palabras positivas
+  const pos = ['muy satisfecho','satisfecho','excelente','muy bueno','bueno','siempre','totalmente','completamente','de acuerdo','muy de acuerdo','óptimo','optimo','5 -','4 -','5-','4-'];
+  const neg = ['insatisfecho','malo','nunca','pésimo','pesimo','deficiente','en desacuerdo','muy en desacuerdo'];
+  if (pos.some(w => s.includes(w))) return true;
+  if (neg.some(w => s.includes(w))) return false;
+  return null;
+}
+
 function actualizarKPIs(data) {
   document.getElementById('kpiTotal').textContent = data.length || '—';
   document.getElementById('badgeTotal').textContent = data.length;
-  const pregs = Object.keys(data[0]||{}).filter(k=>k.trim().startsWith('¿'));
+  const pregs = Object.keys(data[0]||{}).filter(esPreguntaSatisfaccion);
   if (pregs.length && data.length) {
-    const pos = ['muy satisfecho','satisfecho','excelente','muy bueno','bueno','siempre','totalmente','completamente'];
+    // Detectar escala máxima (5 o 10 o cualquier otra)
+    let maxVal = 5;
+    data.forEach(r => pregs.forEach(p => {
+      const n = parseFloat((r[p]||'').toString().replace(',','.'));
+      if (!isNaN(n) && n > maxVal) maxVal = n;
+    }));
     let ok=0, tot=0;
-    data.forEach(r => pregs.forEach(p => { const v=(r[p]||'').toLowerCase(); if(v){tot++;if(pos.some(w=>v.includes(w)))ok++;} }));
+    data.forEach(r => pregs.forEach(p => {
+      const res = esRespuestaPositiva(r[p], maxVal);
+      if (res !== null) { tot++; if (res) ok++; }
+    }));
     document.getElementById('kpiSat').textContent = tot ? Math.round(ok/tot*100)+'%' : '—';
   } else document.getElementById('kpiSat').textContent = '—';
   document.getElementById('kpiServ').textContent = new Set(data.map(r=>r['Servicio a calificar']).filter(Boolean)).size || '—';
