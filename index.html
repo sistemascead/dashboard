@@ -3,495 +3,957 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard-Reporte</title>
+  <!-- CSP: bloquea scripts inline de terceros, iframes arbitrarios y recursos no autorizados -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' https:;
+             script-src 'self' 'unsafe-inline'
+               https://cdn.jsdelivr.net https://alcdn.msauth.net
+               https://cdnjs.cloudflare.com https://login.microsoftonline.com;
+             style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+             connect-src 'self' https://login.microsoftonline.com https://graph.microsoft.com
+               https://login.live.com;
+             img-src 'self' data: https:;
+             frame-src https://login.microsoftonline.com https://login.live.com;
+             object-src 'none'; base-uri 'self';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="no-referrer" />
+  <title>Dashboard · Satisfacción en Atención en Salud</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js">document.addEventListener('DOMContentLoaded', () => {
-  const tablaVisible = localStorage.getItem('tablaDatosVisible') === 'true';
-  const graficoVisible = localStorage.getItem('graficosPreguntasVisible') === 'true';
-
-  const tablaCont = document.getElementById('tablaDatosWrapper');
-  const graficoCont = document.getElementById('graficosPreguntas');
-  const tablaBtn = document.querySelector('button[onclick="toggleTablaDatos()"]');
-  const graficoBtn = document.querySelector('button[onclick="toggleGraficosPreguntas()"]');
-
-  if (tablaCont && tablaBtn) {
-    tablaCont.style.display = tablaVisible ? 'block' : 'none';
-    tablaBtn.textContent = tablaVisible ? 'Ocultar' : 'Mostrar';
-  }
-  if (graficoCont && graficoBtn) {
-    graficoCont.style.display = graficoVisible ? 'block' : 'none';
-    graficoBtn.textContent = graficoVisible ? 'Ocultar' : 'Mostrar';
-  }
-});
-</script>
-<script>
-  function toggleGraficosPreguntas() {
-  const contenedor = document.getElementById('graficosPreguntas');
-  const boton = document.querySelector('button[onclick="toggleGraficosPreguntas()"]');
-  const visible = contenedor.style.display !== 'none';
-  contenedor.style.display = visible ? 'none' : 'block';
-  boton.textContent = visible ? 'Mostrar' : 'Ocultar';
-  localStorage.setItem('graficosPreguntasVisible', !visible);
-}
-</script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <script src="https://alcdn.msauth.net/browser/3.5.0/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {
-      background-color: #f4f6f9;
-      font-family: 'Segoe UI', sans-serif;
+    :root {
+      --cead-blue: #2e4c8c;
+      --cead-sky: #54c4ec;
+      --bg: #f0f4f8;
+      --card-bg: #ffffff;
+      --text: #1a2233;
+      --text-muted: #6b7a99;
+      --border: #e2e8f0;
+      --shadow: 0 2px 12px rgba(46,76,140,0.08);
     }
-    .cead-header {
-      background-color: #2e4c8c;
-      color: white;
-      padding: 1rem 2rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    html.dark {
+      --bg: #0f172a; --card-bg: #1e293b; --text: #e2e8f0;
+      --text-muted: #94a3b8; --border: #334155; --shadow: 0 2px 12px rgba(0,0,0,.35);
     }
-    .cead-header img {
-      height: 50px;
-    }
-    main {
-      padding: 2rem;
-    }
-    .btn-primary {
-      background-color: #54c4ec;
-      border-color: #54c4ec;
-    }
-    .btn-primary:hover {
-      background-color: #46add1;
-      border-color: #46add1;
-    }
-    label {
-      font-weight: 600;
-    }
-    .card-section {
-      background: white;
-      border-radius: 8px;
-      padding: 1.5rem;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      margin-bottom: 2rem;
-    }
-    canvas {
-      background-color: white;
-      border-radius: 8px;
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; transition: background .3s, color .3s; }
+
+    /* ════════════════════════════════
+       PANTALLA DE LOGIN
+    ════════════════════════════════ */
+    #loginScreen {
+      position: fixed; inset: 0; z-index: 9999;
+      background: linear-gradient(135deg, #1a2d5a 0%, #2e4c8c 50%, #1d6fa8 100%);
+      display: flex; align-items: center; justify-content: center;
       padding: 1rem;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
+    #loginScreen.hidden { display: none; }
+
+    .login-card {
+      background: rgba(255,255,255,.97);
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 25px 60px rgba(0,0,0,.35);
+      text-align: center;
+    }
+    html.dark .login-card { background: rgba(30,41,59,.97); color: #e2e8f0; }
+
+    .login-logo { height: 64px; margin-bottom: 1rem; }
+    .login-title { font-size: 1.15rem; font-weight: 700; color: var(--cead-blue); margin-bottom: .25rem; }
+    html.dark .login-title { color: var(--cead-sky); }
+    .login-sub { font-size: .82rem; color: var(--text-muted); margin-bottom: 2rem; }
+
+    .btn-ms-login {
+      display: flex; align-items: center; justify-content: center; gap: .65rem;
+      width: 100%; padding: .75rem 1.25rem;
+      background: #0078d4; color: #fff; border: none; border-radius: 10px;
+      font-size: .95rem; font-weight: 600; cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      box-shadow: 0 4px 14px rgba(0,120,212,.35);
+    }
+    .btn-ms-login:hover  { background: #106ebe; box-shadow: 0 6px 20px rgba(0,120,212,.45); }
+    .btn-ms-login:active { transform: scale(.98); }
+    .btn-ms-logo { width: 20px; height: 20px; flex-shrink: 0; }
+
+    .login-divider {
+      display: flex; align-items: center; gap: .75rem;
+      margin: 1.5rem 0; color: var(--text-muted); font-size: .78rem;
+    }
+    .login-divider::before, .login-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* Formulario local (fallback temporal) */
+    .local-login-form { text-align: left; }
+    .local-login-form label { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); display: block; margin-bottom: .3rem; }
+    .local-login-form input {
+      width: 100%; padding: .6rem .875rem; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: .9rem; background: var(--bg); color: var(--text);
+      transition: border-color .15s;
+    }
+    .local-login-form input:focus { border-color: var(--cead-sky); outline: none; box-shadow: 0 0 0 3px rgba(84,196,236,.2); }
+    .btn-local-login {
+      width: 100%; padding: .65rem; background: var(--cead-blue); color: #fff;
+      border: none; border-radius: 8px; font-size: .9rem; font-weight: 600;
+      cursor: pointer; margin-top: .75rem; transition: background .15s;
+    }
+    .btn-local-login:hover { background: #24408a; }
+
+    .login-error {
+      background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;
+      border-radius: 8px; padding: .6rem .875rem; font-size: .8rem;
+      margin-top: .75rem; display: none; text-align: left;
+    }
+    .login-error.show { display: block; }
+
+    .login-footer { margin-top: 1.75rem; font-size: .7rem; color: var(--text-muted); }
+    .login-footer a { color: var(--cead-sky); text-decoration: none; }
+
+    /* spinner en botón */
+    .btn-ms-login .spin { display: none; width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+    .btn-ms-login.loading .spin { display: inline-block; }
+    .btn-ms-login.loading .btn-ms-logo,
+    .btn-ms-login.loading .btn-ms-txt { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ════════════════════════════════
+       APP
+    ════════════════════════════════ */
+    #appContent { display: none; }
+
+    .app-header {
+      background: var(--cead-blue); color: #fff;
+      padding: .75rem 1.5rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      position: sticky; top: 0; z-index: 200;
+      box-shadow: 0 2px 10px rgba(0,0,0,.2);
+    }
+    .app-header img { height: 42px; }
+    .app-header h1 { font-size: 1rem; font-weight: 600; margin: 0; }
+
+    .badge-status {
+      display: inline-flex; align-items: center; gap: .35rem;
+      font-size: .7rem; font-weight: 700; padding: .25rem .7rem; border-radius: 20px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .badge-on  { background: #dcfce7; color: #166534; }
+    .badge-off { background: rgba(255,255,255,.15); color: #fff; }
+
+    .btn-icon { background: rgba(255,255,255,.15); border: none; color: #fff; border-radius: 8px; padding: .35rem .6rem; cursor: pointer; font-size: .95rem; }
+    .btn-icon:hover { background: rgba(255,255,255,.25); }
+
+    /* Usuario en header */
+    .user-chip {
+      display: flex; align-items: center; gap: .5rem;
+      background: rgba(255,255,255,.15); border-radius: 20px;
+      padding: .25rem .75rem .25rem .35rem; cursor: pointer;
+      position: relative;
+    }
+    .user-chip:hover { background: rgba(255,255,255,.25); }
+    .user-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--cead-sky); display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .user-chip-name { font-size: .8rem; font-weight: 600; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .user-dropdown {
+      display: none; position: absolute; top: calc(100% + 8px); right: 0;
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15); min-width: 220px; padding: .5rem 0; z-index: 300;
+    }
+    .user-dropdown.open { display: block; }
+    .user-dropdown-item {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .6rem 1rem; font-size: .85rem; color: var(--text); cursor: pointer;
+    }
+    .user-dropdown-item:hover { background: rgba(84,196,236,.08); }
+    .user-dropdown-item.danger { color: #dc2626; }
+    .user-dropdown-sep { height: 1px; background: var(--border); margin: .25rem 0; }
+
+    /* Layout */
+    .main { padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+    @media(max-width:576px) { .main { padding: 1rem; } }
+
+    /* Cards */
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 1.25rem; }
+    .section-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text-muted); margin-bottom: .75rem; }
+
+    /* KPI */
+    .kpi { text-align: center; }
+    .kpi-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin: 0 auto .5rem; }
+    .kpi-val { font-size: 2rem; font-weight: 800; line-height: 1.1; color: var(--cead-blue); }
+    .kpi-lbl { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-top: .2rem; }
+
+    /* M365 banner */
+    .m365-banner {
+      background: linear-gradient(135deg,#0078d4,#1B6EC2); color:#fff;
+      border-radius: 14px; padding: 1.25rem 1.5rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+    }
+    .btn-m365 { background:#fff; color:#0078d4; border:none; border-radius:8px; padding:.5rem 1.2rem; font-weight:700; font-size:.875rem; cursor:pointer; display:flex; align-items:center; gap:.5rem; }
+    .btn-m365:hover { background:#e8f3ff; }
+
+    /* Filtros */
+    .filter-row { display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-end; }
+    .fg { flex:1; min-width:155px; }
+    .fg label { font-size:.7rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:.25rem; text-transform:uppercase; letter-spacing:.5px; }
+    .form-control,.form-select { background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:.875rem; padding:.45rem .75rem; }
+    .form-control:focus,.form-select:focus { border-color:var(--cead-sky); box-shadow:0 0 0 3px rgba(84,196,236,.2); outline:none; }
+    .btn-cead { background:var(--cead-sky); color:#fff; border:none; border-radius:8px; padding:.45rem 1.1rem; font-weight:600; cursor:pointer; font-size:.875rem; }
+    .btn-cead:hover { background:#3ab1d8; }
+    .btn-outline-sec { background:transparent; color:var(--text-muted); border:1px solid var(--border); border-radius:8px; padding:.45rem .8rem; cursor:pointer; font-size:.875rem; }
+    .btn-outline-sec:hover { border-color:var(--cead-sky); color:var(--cead-sky); }
+
+    /* Charts */
+    canvas { max-height: 280px; }
+
+    /* Table */
+    .table { color: var(--text); }
+    .table th { font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); border-color:var(--border); font-weight:700; }
+    .table td { font-size:.8rem; border-color:var(--border); vertical-align:middle; }
+    .table tbody tr:hover { background:rgba(84,196,236,.06); }
+
+    /* Loader */
+    .loader-wrap { display:none; align-items:center; gap:.5rem; color:var(--text-muted); font-size:.85rem; margin-top:.75rem; }
+    .spinner-xs { width:.9rem; height:.9rem; border-width:2px; }
+
+    /* File selector modal */
+    .file-item { padding:.75rem 1rem; border:1px solid var(--border); border-radius:10px; cursor:pointer; margin-bottom:.5rem; display:flex; align-items:center; gap:.75rem; }
+    .file-item:hover { border-color:var(--cead-sky); background:rgba(84,196,236,.05); }
+    .modal-content { background:var(--card-bg); color:var(--text); border:1px solid var(--border); border-radius:16px; }
+    .modal-header { border-bottom:1px solid var(--border); }
+    html.dark .btn-close { filter:invert(1); }
+
+    /* Toggle */
+    .toggle-btn { background:transparent; border:1px solid var(--border); color:var(--text-muted); border-radius:8px; padding:.3rem .8rem; cursor:pointer; font-size:.8rem; }
+    .toggle-btn:hover { border-color:var(--cead-sky); color:var(--cead-sky); }
+
+    /* Session expired overlay */
+    #sessionExpired { display:none; position:fixed; inset:0; z-index:8000; background:rgba(0,0,0,.65); backdrop-filter:blur(4px); align-items:center; justify-content:center; }
+    #sessionExpired.show { display:flex; }
+    .session-card { background:var(--card-bg); border-radius:16px; padding:2rem; max-width:360px; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3); }
   </style>
 </head>
-<body class="p-0">
-  <header class="cead-header">
-    <img src="0A-CEAD.png" alt="CEAD Logo" />
-    <h1 class="h5 mb-0">Dashboard-Reportes</h1>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PANTALLA DE LOGIN — cubre toda la página hasta autenticar
+═══════════════════════════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+
+    <img src="0A-CEAD.png" alt="CEAD" class="login-logo" onerror="this.style.display='none'" />
+    <div class="login-title">Dashboard · Satisfacción en Atención en Salud</div>
+    <div class="login-sub">Acceso restringido al personal autorizado de CEAD Alivium</div>
+
+    <!-- Microsoft 365 login -->
+    <button class="btn-ms-login" id="btnLoginMs" onclick="loginMicrosoft()">
+      <svg class="btn-ms-logo" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+        <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
+        <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
+        <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
+      </svg>
+      <span class="btn-ms-txt">Iniciar sesión con Microsoft 365</span>
+      <span class="spin"></span>
+    </button>
+
+    <div class="login-divider">o acceso local temporal</div>
+
+    <!-- Login local (fallback mientras configuras Azure AD) -->
+    <form class="local-login-form" onsubmit="loginLocal(event)">
+      <label for="localPass">Contraseña</label>
+      <input type="password" id="localPass" placeholder="Contraseña de acceso local" autocomplete="current-password" />
+      <button type="submit" class="btn-local-login">
+        <i class="bi bi-lock-fill me-2"></i>Entrar
+      </button>
+    </form>
+
+    <div class="login-error" id="loginError"></div>
+
+    <div class="login-footer">
+      Inicio de sesión seguro mediante OAuth 2.0 · Microsoft Identity Platform<br/>
+      <a href="https://privacy.microsoft.com/es-es/privacystatement" target="_blank" rel="noopener noreferrer">Privacidad</a>
+    </div>
+  </div>
+</div>
+
+<!-- Sesión expirada -->
+<div id="sessionExpired">
+  <div class="session-card">
+    <i class="bi bi-shield-lock-fill" style="font-size:2.5rem;color:var(--cead-blue)"></i>
+    <h5 class="mt-3 mb-1">Sesión expirada</h5>
+    <p class="text-muted" style="font-size:.85rem">Tu sesión ha caducado por inactividad. Vuelve a iniciar sesión.</p>
+    <button class="btn-cead" onclick="cerrarSesion()">Volver al inicio de sesión</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     APLICACIÓN — oculta hasta que se autentique
+═══════════════════════════════════════════════════════════ -->
+<div id="appContent">
+
+  <!-- ── Header ── -->
+  <header class="app-header">
+    <div class="d-flex align-items-center gap-3">
+      <img src="0A-CEAD.png" alt="CEAD" />
+      <h1>Dashboard · Satisfacción en Atención en Salud</h1>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span id="statusBadge" class="badge-status badge-off">
+        <i class="bi bi-circle-fill" style="font-size:.55rem"></i> Local
+      </span>
+      <button class="btn-icon" id="btnTheme" onclick="toggleTheme()" title="Modo oscuro">
+        <i class="bi bi-moon-fill"></i>
+      </button>
+      <!-- Chip de usuario -->
+      <div class="user-chip" onclick="toggleUserMenu()" id="userChip">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <span class="user-chip-name" id="userChipName">Usuario</span>
+        <i class="bi bi-chevron-down" style="font-size:.65rem;opacity:.7"></i>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="user-dropdown-item" style="flex-direction:column;align-items:flex-start;gap:.15rem;cursor:default;opacity:.7">
+            <span id="ddName" style="font-weight:700;font-size:.85rem"></span>
+            <span id="ddEmail" style="font-size:.72rem"></span>
+          </div>
+          <div class="user-dropdown-sep"></div>
+          <div class="user-dropdown-item" onclick="conectarM365()">
+            <i class="bi bi-microsoft" style="color:#0078d4"></i> Conectar / cambiar cuenta M365
+          </div>
+          <div class="user-dropdown-sep"></div>
+          <div class="user-dropdown-item danger" onclick="cerrarSesion()">
+            <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+          </div>
+        </div>
+      </div>
+    </div>
   </header>
-  <main>
-    <div class="card-section">
-      <div class="mb-3">
-        <label for="fileInput" class="form-label">Subir archivo CSV o XLSX</label>
-        <input type="file" id="fileInput" class="form-control" accept=".csv,.xlsx" />
-      </div>
-      <div class="row">
-        <div class="col-md-3">
-          <label for="fechaInicio" class="form-label">Fecha Desde</label>
-          <input type="date" id="fechaInicio" class="form-control" />
-        </div>
-        <div class="col-md-3">
-          <label for="fechaFin" class="form-label">Fecha Hasta</label>
-          <input type="date" id="fechaFin" class="form-control" />
-        </div>
-        <div class="col-md-3">
-          <label for="agenteFiltro" class="form-label">Filtrar por Agente</label>
-          <select id="agenteFiltro" class="form-select">
-            <option value="">Todos</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label for="servicioFiltro" class="form-label">Filtrar por Servicio</label>
-          <select id="servicioFiltro" class="form-select">
-            <option value="">Todos</option>
-          </select>
-        </div>
 
-        <div class="col-md-3">
-          <label for="entidadFiltro" class="form-label">Filtrar por Entidad</label>
-          <select id="entidadFiltro" class="form-select">
-            <option value="">Todas</option>
-          </select>
-        </div>
+  <div class="main">
 
-
-      </div>
-      <div class="form-check form-switch mt-3">
-        <input class="form-check-input" type="checkbox" id="modoOscuro" onchange="toggleDarkMode()">
-        <label class="form-check-label" for="modoOscuro">Modo Oscuro</label>
-      </div>
-      <div class="mt-3 d-flex justify-content-between align-items-center">
-        <div id="filtrosActivos" class="text-muted"></div>
-        <div>
-          <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar Filtros</button>
-          <button class="btn btn-outline-success ms-2" onclick="exportarTabla()">Exportar Tabla</button>
+    <!-- M365 Banner (si no hay token activo) -->
+    <div id="m365Banner" class="mb-4 d-none">
+      <div class="m365-banner">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-microsoft" style="font-size:2rem"></i>
+          <div>
+            <div style="font-weight:700;font-size:1rem">Conectar con Microsoft 365</div>
+            <div style="font-size:.8rem;opacity:.85">Carga automáticamente las respuestas de la encuesta desde OneDrive</div>
+          </div>
         </div>
-      </div>
-      <div id="loader" style="display:none;" class="text-center my-3">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-2">Procesando archivo...</p>
+        <button class="btn-m365" onclick="conectarM365()">
+          <i class="bi bi-cloud-arrow-down me-1"></i> Conectar
+        </button>
       </div>
     </div>
-    <div class="card-section">
-      <p id="totalServicios" class="fs-5 fw-bold mb-0 text-primary"></p>
-    </div>
-    <div class="card-section">
-      <canvas id="graficoResumen" height="100" class="mb-5"></canvas>
-      <canvas id="graficoServicios" height="100"></canvas>
-      <canvas id="graficoEntidades" height="100"></canvas>
-    </div>
-    <div class="card-section">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0">Gráficos de Preguntas de Satisfacción</h5>
-        <button class="btn btn-sm btn-outline-primary" type="button" onclick="toggleGraficosPreguntas()">Mostrar</button>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3">
+        <div class="card kpi">
+          <div class="kpi-icon" style="background:#e8f4fd;color:#2e4c8c"><i class="bi bi-people-fill"></i></div>
+          <div class="kpi-val" id="kpiTotal">—</div>
+          <div class="kpi-lbl">Total respuestas</div>
+        </div>
       </div>
-      <div id="graficosPreguntas" style="display: none;"></div>
-    </div>
-    <div class="card-section">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0">Detalle de Registros</h5>
-        <button class="btn btn-sm btn-outline-primary" type="button" onclick="toggleTablaDatos()">Mostrar</button>
+      <div class="col-6 col-lg-3">
+        <div class="card kpi">
+          <div class="kpi-icon" style="background:#dcfce7;color:#166534"><i class="bi bi-emoji-smile-fill"></i></div>
+          <div class="kpi-val" id="kpiSat" style="color:#166534">—</div>
+          <div class="kpi-lbl">% Satisfecho / Muy satisfecho</div>
+        </div>
       </div>
-      <div class="table-responsive" id="tablaDatosWrapper" style="display: none;">
-        <table class="table table-bordered table-hover" id="tablaDatos">
-          <thead class="table-light"></thead>
-          <tbody></tbody>
-        </table>
+      <div class="col-6 col-lg-3">
+        <div class="card kpi">
+          <div class="kpi-icon" style="background:#fef3c7;color:#92400e"><i class="bi bi-clipboard2-pulse-fill"></i></div>
+          <div class="kpi-val" id="kpiServ" style="color:#92400e">—</div>
+          <div class="kpi-lbl">Servicios evaluados</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card kpi">
+          <div class="kpi-icon" style="background:#ede9fe;color:#5b21b6"><i class="bi bi-calendar3"></i></div>
+          <div class="kpi-val" id="kpiPer" style="font-size:1rem;color:#5b21b6">—</div>
+          <div class="kpi-lbl">Período de datos</div>
+        </div>
       </div>
     </div>
-  </main>
-  <script>
-    let datosOriginales = [], chart, chartServicios;
 
-    function toggleDarkMode() {
-      document.body.classList.toggle('bg-dark');
-      document.body.classList.toggle('text-white');
-      document.querySelectorAll('.card-section').forEach(c => c.classList.toggle('bg-secondary'));
-    }
+    <!-- Filtros -->
+    <div class="card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <span class="section-label mb-0">Filtros</span>
+        <div class="d-flex gap-2 align-items-center">
+          <span id="filtroTexto" style="font-size:.78rem;color:var(--text-muted)"></span>
+          <button class="btn-cead" onclick="aplicarFiltros()"><i class="bi bi-funnel me-1"></i>Aplicar</button>
+          <button class="btn-outline-sec" onclick="limpiarFiltros()" title="Limpiar"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="fg"><label>Fecha desde</label><input type="date" id="fechaInicio" class="form-control" /></div>
+        <div class="fg"><label>Fecha hasta</label><input type="date" id="fechaFin" class="form-control" /></div>
+        <div class="fg"><label>Agente</label><select id="agenteFiltro" class="form-select"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Servicio</label><select id="servicioFiltro" class="form-select"><option value="">Todos</option></select></div>
+        <div class="fg"><label>Entidad</label><select id="entidadFiltro" class="form-select"><option value="">Todas</option></select></div>
+      </div>
+      <div style="margin-top:.875rem;padding-top:.875rem;border-top:1px solid var(--border)">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Importar CSV / XLSX</label>
+          <input type="file" id="fileInput" class="form-control" accept=".csv,.xlsx" style="max-width:260px;font-size:.8rem" />
+          <button class="btn-outline-sec" onclick="exportarTabla()"><i class="bi bi-download me-1"></i>Exportar</button>
+        </div>
+      </div>
+      <div class="loader-wrap" id="loader">
+        <div class="spinner-border spinner-xs text-primary" role="status"></div>
+        <span>Cargando datos...</span>
+      </div>
+    </div>
 
-    document.getElementById('fileInput').addEventListener('change', function (e) {
-      document.getElementById('loader').style.display = 'block';
-      const file = e.target.files[0];
-      if (!file) return;
-      const fileExt = file.name.split('.').pop().toLowerCase();
+    <!-- Charts fila 1 -->
+    <div class="row g-3 mb-4">
+      <div class="col-lg-6"><div class="card h-100"><div class="section-label">Encuestas por Agente</div><canvas id="chartAgente"></canvas></div></div>
+      <div class="col-lg-6"><div class="card h-100"><div class="section-label">Por Tipo de Servicio</div><canvas id="chartServicio"></canvas></div></div>
+    </div>
 
-      if (fileExt === 'csv') {
-        Papa.parse(file, {
-          header: true,
-          skipEmptyLines: true,
-          complete: function (results) {
-            datosOriginales = results.data.map(limpiarCampos);
-            llenarFiltros(datosOriginales);
-            aplicarFiltros();
-            document.getElementById('loader').style.display = 'none';
-          },
-          transformHeader: header => header.trim()
-        });
-      } else if (fileExt === 'xlsx') {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheet = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheet];
-          datosOriginales = XLSX.utils.sheet_to_json(worksheet, { raw: false }).map(limpiarCampos);
-          llenarFiltros(datosOriginales);
-          aplicarFiltros();
-          document.getElementById('loader').style.display = 'none';
-        };
-        reader.readAsArrayBuffer(file);
-      } else {
-        alert('Formato no compatible. Solo se aceptan CSV o XLSX.');
-        document.getElementById('loader').style.display = 'none';
-      }
-    });
+    <!-- Charts fila 2 -->
+    <div class="row g-3 mb-4">
+      <div class="col-lg-8"><div class="card h-100"><div class="section-label">Por Entidad Convenio</div><canvas id="chartEntidad"></canvas></div></div>
+      <div class="col-lg-4"><div class="card h-100 text-center"><div class="section-label">Satisfacción General</div><canvas id="chartPie" style="max-height:220px"></canvas></div></div>
+    </div>
 
-    function exportarTabla() {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(datosOriginales);
-      XLSX.utils.book_append_sheet(wb, ws, "Datos Filtrados");
-      XLSX.writeFile(wb, "datos_filtrados.xlsx");
-    }
+    <!-- Preguntas -->
+    <div class="card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="section-label mb-0">Preguntas de Satisfacción</span>
+        <button class="toggle-btn" id="btnTogglePreg" onclick="toggleSeccion('secPreguntas','btnTogglePreg')">
+          <i class="bi bi-chevron-down me-1"></i>Mostrar
+        </button>
+      </div>
+      <div id="secPreguntas" style="display:none"><div class="row g-3" id="gridPreguntas"></div></div>
+    </div>
 
-    function limpiarCampos(row) {
-      const nueva = {};
-      for (let key in row) {
-        const limpio = key.replace(/\s+/g, ' ').trim();
-        nueva[limpio] = typeof row[key] === 'string' ? row[key].trim() : row[key];
-      }
-      if (!isNaN(nueva['Fecha']) && !isNaN(parseFloat(nueva['Fecha']))) {
-        const excelDate = parseFloat(nueva['Fecha']);
-        const jsDate = new Date((excelDate - 25569) * 86400 * 1000);
-        nueva['Fecha'] = jsDate.toISOString().split('T')[0];
-      } else if (typeof nueva['Fecha'] === 'string') {
-        let f = new Date(nueva['Fecha']);
-        if (!isNaN(f)) {
-          nueva['Fecha'] = f.toISOString().split('T')[0];
-        }
-      }
-      return nueva;
-    }
+    <!-- Tabla -->
+    <div class="card mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="section-label mb-0">
+          Detalle de Registros
+          <span id="badgeTotal" class="badge rounded-pill ms-1" style="background:var(--cead-sky);font-size:.65rem">0</span>
+        </span>
+        <button class="toggle-btn" id="btnToggleTabla" onclick="toggleSeccion('secTabla','btnToggleTabla')">
+          <i class="bi bi-chevron-down me-1"></i>Mostrar
+        </button>
+      </div>
+      <div id="secTabla" style="display:none">
+        <div class="table-responsive">
+          <table class="table table-hover" id="tablaDatos">
+            <thead><tr><th>Sin datos</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-   function llenarFiltros(data) {
-  const agentes = new Set();
-  const servicios = new Set();
-  const entidades = new Set();
+  </div><!-- /main -->
+</div><!-- /appContent -->
 
-  data.forEach(row => {
-    if (row['Nombre']) agentes.add(row['Nombre']);
-    if (row['Servicio a calificar']) servicios.add(row['Servicio a calificar']);
-    if (row['Entidad convenio']) entidades.add(row['Entidad convenio']);
-  });
+<!-- Modal selector archivos -->
+<div class="modal fade" id="modalArchivos" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-excel-fill me-2" style="color:#217346"></i>Selecciona el archivo de encuesta</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="listaArchivos"></div>
+    </div>
+  </div>
+</div>
 
-  document.getElementById('agenteFiltro').innerHTML = '<option value="">Todos</option>' +
-    Array.from(agentes).map(a => `<option value="${a}">${a}</option>`).join('');
-  document.getElementById('servicioFiltro').innerHTML = '<option value="">Todos</option>' +
-    Array.from(servicios).map(s => `<option value="${s}">${s}</option>`).join('');
-  document.getElementById('entidadFiltro').innerHTML = '<option value="">Todas</option>' +
-    Array.from(entidades).map(e => `<option value="${e}">${e}</option>`).join('');
-}
-
-
-    function aplicarFiltros() {
-  const fechaInicio = document.getElementById('fechaInicio').value;
-  const fechaFin = document.getElementById('fechaFin').value;
-  const agente = document.getElementById('agenteFiltro').value;
-  const servicio = document.getElementById('servicioFiltro').value;
-  const entidad = document.getElementById('entidadFiltro').value;
-
-  const filtrados = datosOriginales.filter(row => {
-    const cumpleFecha = (!fechaInicio || row['Fecha'] >= fechaInicio) && (!fechaFin || row['Fecha'] <= fechaFin);
-    const cumpleAgente = !agente || row['Nombre'] === agente;
-    const cumpleServicio = !servicio || row['Servicio a calificar'] === servicio;
-    const cumpleEntidad = !entidad || row['Entidad convenio'] === entidad;
-    return cumpleFecha && cumpleAgente && cumpleServicio && cumpleEntidad;
-  });
-
-  renderizarTabla(filtrados);
-  renderizarGrafico(filtrados);
-  renderizarGraficoServicios(filtrados);
-  renderizarGraficoEntidades(filtrados);
-  renderizarGraficosPreguntas(filtrados); // 🟢 AGREGA ESTA LÍNEA
-  mostrarTotalServicios(filtrados);
-
-  document.getElementById('filtrosActivos').innerText =
-    `Filtros: ${fechaInicio || 'inicio'} → ${fechaFin || 'fin'}, Agente: ${agente || 'Todos'}, Servicio: ${servicio || 'Todos'}, Entidad: ${entidad || 'Todas'}`;
-}
-
-
-
-    function mostrarTotalServicios(data) {
-      document.getElementById('totalServicios').innerText = `Total de registros: ${data.length}`;
-    }
-
-    function renderizarTabla(data) {
-      const tabla = document.getElementById('tablaDatos');
-      const thead = tabla.querySelector('thead');
-      const tbody = tabla.querySelector('tbody');
-      if (data.length === 0) {
-        thead.innerHTML = '<tr><th>No hay datos</th></tr>';
-        tbody.innerHTML = '';
-        return;
-      }
-      const columnas = Object.keys(data[0]);
-      thead.innerHTML = '<tr>' + columnas.map(col => `<th>${col}</th>`).join('') + '</tr>';
-      tbody.innerHTML = data.map(row => {
-        return '<tr>' + columnas.map(col => `<td>${row[col] || ''}</td>`).join('') + '</tr>';
-      }).join('');
-    }
-
-    function renderizarGrafico(data) {
-      const resumen = {};
-      data.forEach(row => {
-        const agente = row['Nombre'] || 'Desconocido';
-        resumen[agente] = (resumen[agente] || 0) + 1;
-      });
-      const labels = Object.keys(resumen);
-      const valores = Object.values(resumen);
-      const paleta = ['#45B1DF', '#63AEE0', '#2E4C8C', '#A5C6E5', '#CFE5F5'];
-      const colores = labels.map((_, i) => paleta[i % paleta.length]);
-      const ctx = document.getElementById('graficoResumen').getContext('2d');
-      if (window.chart) window.chart.destroy();
-      window.chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Número de Encuestas por Agente',
-            data: valores,
-            backgroundColor: colores,
-            borderColor: colores,
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: { y: { beginAtZero: true } }
-        }
-      });
-    }
-
-let chartEntidades;
-
-function renderizarGraficoEntidades(data) {
-  const resumen = {};
-  data.forEach(row => {
-    const entidad = row['Entidad convenio'] || 'Desconocido';
-    resumen[entidad] = (resumen[entidad] || 0) + 1;
-  });
-
-  const labels = Object.keys(resumen);
-  const valores = Object.values(resumen);
-  const colores = labels.map((_, i) => `hsl(${(i * 50 + 120) % 360}, 70%, 60%)`);
-  const ctx = document.getElementById('graficoEntidades').getContext('2d');
-  if (chartEntidades) chartEntidades.destroy();
-  chartEntidades = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Cantidad por Entidad',
-        data: valores,
-        backgroundColor: colores,
-        borderColor: colores,
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true }
-      }
-    }
-  });
-}
-
-
-    function renderizarGraficoServicios(data) {
-      const resumen = {};
-      data.forEach(row => {
-        const servicio = row['Servicio a calificar'] || 'Desconocido';
-        resumen[servicio] = (resumen[servicio] || 0) + 1;
-      });
-      const labels = Object.keys(resumen);
-      const valores = Object.values(resumen);
-      const colores = labels.map((_, i) => `hsl(${(i * 40 + 180) % 360}, 70%, 60%)`);
-      const ctx = document.getElementById('graficoServicios').getContext('2d');
-      if (window.chartServicios) window.chartServicios.destroy();
-      window.chartServicios = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Cantidad por Tipo de Servicio',
-            data: valores,
-            backgroundColor: colores,
-            borderColor: colores,
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: { y: { beginAtZero: true } }
-        }
-      });
-    }
-
-    function renderizarGraficosPreguntas(data) {
-      const preguntas = Object.keys(data[0]).filter(k => k.trim().startsWith('¿'));
-
-      const contenedor = document.getElementById('graficosPreguntas');
-      contenedor.innerHTML = '';
-
-      preguntas.forEach((pregunta, index) => {
-        if (!data.some(row => row[pregunta] && row[pregunta].trim())) {
-          const aviso = document.createElement('div');
-          aviso.className = 'mb-4 alert alert-warning';
-          aviso.textContent = `No hay datos para la pregunta: "${pregunta}"`;
-          contenedor.appendChild(aviso);
-          return;
-        }
-
-        const respuestas = {};
-        data.forEach(row => {
-          const valor = (row[pregunta] || '').trim();
-          if (valor) respuestas[valor] = (respuestas[valor] || 0) + 1;
-        });
-
-        const labels = Object.keys(respuestas);
-        const valores = Object.values(respuestas);
-        const paleta = ['#45B1DF', '#63AEE0', '#2E4C8C', '#A5C6E5', '#CFE5F5'];
-        const colores = labels.map((_, i) => paleta[i % paleta.length]);
-
-        const col = document.createElement('div');
-        col.className = 'col-md-6 col-lg-4 mb-4 d-inline-block align-top px-2';
-
-        const titulo = document.createElement('h6');
-        titulo.className = 'fw-bold';
-        titulo.textContent = pregunta;
-        col.appendChild(titulo);
-
-        const canvas = document.createElement('canvas');
-        canvas.style.maxHeight = '250px';
-        canvas.style.maxWidth = '100%';
-        canvas.id = `graficoPregunta${index}`;
-        col.appendChild(canvas);
-
-        new Chart(canvas, {
-          type: 'pie',
-          data: {
-            labels: labels,
-            datasets: [{
-              data: valores,
-              backgroundColor: colores
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: { position: 'bottom' }
-            }
-          }
-        });
-
-        const lista = document.createElement('ul');
-        lista.className = 'mt-2 list-unstyled text-secondary small';
-        labels.forEach((label, i) => {
-          const li = document.createElement('li');
-          li.textContent = `${valores[i]} personas respondieron “${label}”`;
-          lista.appendChild(li);
-        });
-        col.appendChild(lista);
-
-        contenedor.appendChild(col);
-      });
-    }
-  </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  function toggleTablaDatos() {
-  const contenedor = document.getElementById('tablaDatosWrapper');
-  const boton = document.querySelector('button[onclick="toggleTablaDatos()"]');
-  const visible = contenedor.style.display !== 'none';
-  contenedor.style.display = visible ? 'none' : 'block';
-  boton.textContent = visible ? 'Mostrar' : 'Ocultar';
-  localStorage.setItem('tablaDatosVisible', !visible);
+'use strict';
+
+// ════════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN
+// ════════════════════════════════════════════════════════════════
+
+const AZURE = {
+  clientId:    'TU_CLIENT_ID_AQUI',
+  tenantId:    'TU_TENANT_ID_AQUI',
+  redirectUri: window.location.origin + window.location.pathname,
+  // Solo usuarios de este dominio pueden acceder tras login M365
+  dominioOrg:  'ceadalivium.com'
+};
+
+// Hash SHA-256 de la contraseña local de respaldo.
+// Para cambiarla: abre la consola del navegador y ejecuta:
+//   sha256('tuNuevaContraseña').then(h => console.log(h))
+// Luego pega el hash aquí.
+// Contraseña actual por defecto: CEAD2025!  (¡cámbiala!)
+const LOCAL_PASS_HASH = '14726b6ad46fd953283e6afefc7dea7ade8d326924992a2c127a98129ab70ea8';
+
+// Tiempo de inactividad en ms antes de cerrar sesión automáticamente (30 min)
+const INACTIVIDAD_MS = 30 * 60 * 1000;
+
+// ════════════════════════════════════════════════════════════════
+
+const msalConfig = {
+  auth: {
+    clientId:    AZURE.clientId,
+    authority:  `https://login.microsoftonline.com/${AZURE.tenantId}`,
+    redirectUri: AZURE.redirectUri
+  },
+  cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
+};
+const msalScopes = { scopes: ['User.Read', 'Files.Read.All'] };
+
+let msalInstance   = null;
+let cuentaMs       = null;
+let sesionLocal    = false;
+let datosOriginales = [];
+let tmpToken       = null;
+let inactividadTimer;
+const charts       = {};
+const PALETA       = ['#2e4c8c','#54c4ec','#45B1DF','#A5C6E5','#1a3a70','#7dd3f0','#63AEE0','#CFE5F5'];
+
+// ── Inactividad ────────────────────────────────────────────────
+function resetInactividad() {
+  clearTimeout(inactividadTimer);
+  inactividadTimer = setTimeout(mostrarSesionExpirada, INACTIVIDAD_MS);
+}
+function mostrarSesionExpirada() {
+  document.getElementById('sessionExpired').classList.add('show');
+}
+['mousemove','keydown','click','scroll','touchstart'].forEach(e =>
+  document.addEventListener(e, resetInactividad, { passive: true })
+);
+
+// ── Init ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  restoreTheme();
+  restoreSecciones();
+  initMsal();
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#userChip')) {
+      document.getElementById('userDropdown').classList.remove('open');
+    }
+  });
+});
+
+async function initMsal() {
+  if (AZURE.clientId === 'TU_CLIENT_ID_AQUI') return;
+  try {
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    const resp = await msalInstance.handleRedirectPromise();
+    if (resp) { await validarYEntrar(resp.account, 'ms'); return; }
+    const cuentas = msalInstance.getAllAccounts();
+    if (cuentas.length > 0) await validarYEntrar(cuentas[0], 'ms');
+  } catch(e) { console.warn('MSAL init:', e.message); }
 }
 
-  function toggleGraficosPreguntas() {
-    const contenedor = document.getElementById('graficosPreguntas');
-    const boton = document.querySelector('button[onclick="toggleGraficosPreguntas()"]');
-    const visible = contenedor.style.display !== 'none';
-    contenedor.style.display = visible ? 'none' : 'block';
-    boton.textContent = visible ? 'Mostrar' : 'Ocultar';
+// ── Auth Microsoft ─────────────────────────────────────────────
+async function loginMicrosoft() {
+  const btn = document.getElementById('btnLoginMs');
+  if (!msalInstance) {
+    if (AZURE.clientId === 'TU_CLIENT_ID_AQUI') {
+      mostrarError('El administrador aún no ha configurado la integración con Microsoft 365.\nUsa el acceso local temporal mientras tanto.');
+      return;
+    }
+    mostrarError('Error iniciando MSAL. El dashboard debe estar en un servidor web (no file://).');
+    return;
   }
+  btn.classList.add('loading');
+  try {
+    const resp = await msalInstance.loginPopup(msalScopes);
+    await validarYEntrar(resp.account, 'ms');
+  } catch(e) {
+    if (e.errorCode !== 'user_cancelled') mostrarError('Error de autenticación: ' + e.message);
+  } finally { btn.classList.remove('loading'); }
+}
+
+async function validarYEntrar(account, tipo) {
+  if (tipo === 'ms') {
+    // Validar que el usuario pertenece al dominio de la organización
+    const email = (account.username || '').toLowerCase();
+    if (AZURE.dominioOrg && !email.endsWith('@' + AZURE.dominioOrg)) {
+      if (msalInstance) await msalInstance.logoutPopup({ account }).catch(() => {});
+      mostrarError(`Acceso denegado. Solo pueden ingresar cuentas del dominio @${AZURE.dominioOrg}.`);
+      return;
+    }
+    cuentaMs = account;
+    entrarAlDashboard({
+      nombre: account.name || account.username,
+      email:  account.username,
+      tipo:   'Microsoft 365'
+    });
+  }
+}
+
+// ── Auth Local ─────────────────────────────────────────────────
+async function loginLocal(e) {
+  e.preventDefault();
+  const pass = document.getElementById('localPass').value;
+  if (!pass) { mostrarError('Ingresa la contraseña.'); return; }
+  const hash = await sha256(pass);
+  if (hash !== LOCAL_PASS_HASH) {
+    mostrarError('Contraseña incorrecta.');
+    document.getElementById('localPass').value = '';
+    return;
+  }
+  sesionLocal = true;
+  sessionStorage.setItem('localAuth', '1');
+  entrarAlDashboard({ nombre: 'Usuario Local', email: '', tipo: 'Local' });
+}
+
+function entrarAlDashboard({ nombre, email, tipo }) {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appContent').style.display = 'block';
+  document.getElementById('sessionExpired').classList.remove('show');
+
+  // Header: avatar e info
+  const inicial = (nombre || '?')[0].toUpperCase();
+  document.getElementById('userAvatar').textContent  = inicial;
+  document.getElementById('userChipName').textContent = nombre.split(' ')[0];
+  document.getElementById('ddName').textContent  = nombre;
+  document.getElementById('ddEmail').textContent = email || tipo;
+
+  // Badge de conexión
+  if (tipo === 'Microsoft 365') {
+    document.getElementById('statusBadge').className = 'badge-status badge-on';
+    document.getElementById('statusBadge').innerHTML = '<i class="bi bi-microsoft" style="font-size:.65rem"></i> M365';
+    // Si ya tiene token M365, ocultar banner de conexión
+    document.getElementById('m365Banner').classList.add('d-none');
+  } else {
+    document.getElementById('m365Banner').classList.remove('d-none');
+  }
+
+  resetInactividad();
+}
+
+function cerrarSesion() {
+  clearTimeout(inactividadTimer);
+  cuentaMs = null; sesionLocal = false;
+  sessionStorage.removeItem('localAuth');
+  datosOriginales = [];
+  if (msalInstance && cuentaMs) msalInstance.logoutPopup({ account: cuentaMs }).catch(() => {});
+  document.getElementById('appContent').style.display = 'none';
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('sessionExpired').classList.remove('show');
+  document.getElementById('loginError').classList.remove('show');
+  document.getElementById('localPass').value = '';
+  document.getElementById('userDropdown').classList.remove('open');
+}
+
+// ── Token M365 ─────────────────────────────────────────────────
+async function getToken() {
+  if (!msalInstance || !cuentaMs) return null;
+  try { return (await msalInstance.acquireTokenSilent({ ...msalScopes, account: cuentaMs })).accessToken; }
+  catch { return (await msalInstance.acquireTokenPopup({ ...msalScopes, account: cuentaMs })).accessToken; }
+}
+
+async function conectarM365() {
+  document.getElementById('userDropdown').classList.remove('open');
+  if (!msalInstance) { mostrarError('Configura Azure AD primero.'); return; }
+  const btn = document.getElementById('btnLoginMs');
+  try {
+    const resp = await msalInstance.loginPopup(msalScopes);
+    await validarYEntrar(resp.account, 'ms');
+    await buscarOneDrive();
+  } catch(e) { if (e.errorCode !== 'user_cancelled') alert('Error: ' + e.message); }
+}
+
+// ── OneDrive ───────────────────────────────────────────────────
+async function buscarOneDrive() {
+  const token = await getToken();
+  if (!token) { document.getElementById('m365Banner').classList.remove('d-none'); return; }
+  mostrarLoader(true);
+  try {
+    let archivos = [];
+    for (const t of ['encuesta','satisfaccion','Forms']) {
+      const r = await fetch(
+        `https://graph.microsoft.com/v1.0/me/drive/root/search(q='${encodeURIComponent(t)}')?$filter=file/mimeType eq 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'&$select=id,name,lastModifiedDateTime&$top=20`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const d = await r.json();
+      if (d.value) archivos.push(...d.value);
+    }
+    const vistos = new Set();
+    archivos = archivos.filter(f => vistos.has(f.id) ? false : vistos.add(f.id));
+    if (!archivos.length) { alert('No se encontraron archivos Excel de encuestas en OneDrive.\nImporta el archivo manualmente.'); return; }
+    tmpToken = token;
+    if (archivos.length === 1) { await leerArchivoOneDrive(archivos[0].id, token); return; }
+    document.getElementById('listaArchivos').innerHTML = archivos.map(f => `
+      <div class="file-item" onclick="elegirArchivo('${f.id}')">
+        <i class="bi bi-file-earmark-excel-fill" style="font-size:1.5rem;color:#217346"></i>
+        <div>
+          <div style="font-size:.875rem;font-weight:600">${f.name}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">Modificado: ${new Date(f.lastModifiedDateTime).toLocaleDateString('es-CO',{dateStyle:'medium'})}</div>
+        </div>
+      </div>`).join('');
+    new bootstrap.Modal(document.getElementById('modalArchivos')).show();
+  } catch(e) { alert('Error al buscar en OneDrive: ' + e.message); }
+  finally { mostrarLoader(false); }
+}
+
+async function elegirArchivo(id) {
+  bootstrap.Modal.getInstance(document.getElementById('modalArchivos'))?.hide();
+  await leerArchivoOneDrive(id, tmpToken);
+}
+
+async function leerArchivoOneDrive(fileId, token) {
+  mostrarLoader(true);
+  try {
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/0/usedRange?$select=values`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await r.json();
+    if (!data.values || data.values.length < 2) { alert('El archivo no tiene datos.'); return; }
+    const headers = data.values[0].map(h => String(h ?? '').trim());
+    datosOriginales = data.values.slice(1)
+      .filter(row => row.some(c => c !== null && c !== ''))
+      .map(row => {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = String(row[i] ?? '').trim(); });
+        return normalizarFila(obj);
+      });
+    llenarFiltros(datosOriginales);
+    aplicarFiltros();
+    document.getElementById('m365Banner').classList.add('d-none');
+  } catch(e) { alert('Error al leer el archivo: ' + e.message); }
+  finally { mostrarLoader(false); }
+}
+
+// ── Import manual ──────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  mostrarLoader(true);
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv') {
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true, transformHeader: h => h.trim(),
+      complete(res) { datosOriginales = res.data.map(normalizarFila); llenarFiltros(datosOriginales); aplicarFiltros(); mostrarLoader(false); }
+    });
+  } else if (ext === 'xlsx') {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+      datosOriginales = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { raw: false }).map(normalizarFila);
+      llenarFiltros(datosOriginales); aplicarFiltros(); mostrarLoader(false);
+    };
+    reader.readAsArrayBuffer(file);
+  } else { alert('Solo CSV o XLSX.'); mostrarLoader(false); }
+});
+
+// ── Datos ──────────────────────────────────────────────────────
+function normalizarFila(row) {
+  const n = {};
+  for (const k in row) {
+    const lk = k.replace(/\s+/g,' ').trim();
+    n[lk] = typeof row[k] === 'string' ? row[k].trim() : String(row[k] ?? '');
+  }
+  const fechaKey = Object.keys(n).find(k =>
+    /^fecha$/i.test(k) || /start time/i.test(k) || /completion time/i.test(k) || /^date$/i.test(k)
+  );
+  if (fechaKey && n[fechaKey]) {
+    const v = n[fechaKey];
+    let d;
+    if (!isNaN(v) && v !== '') d = new Date((parseFloat(v) - 25569) * 86400000);
+    else d = new Date(v);
+    if (!isNaN(d)) { n['Fecha'] = d.toISOString().split('T')[0]; if (fechaKey !== 'Fecha') delete n[fechaKey]; }
+  }
+  return n;
+}
+
+function llenarFiltros(data) {
+  const ag = new Set(), sv = new Set(), en = new Set();
+  data.forEach(r => { if(r['Nombre']) ag.add(r['Nombre']); if(r['Servicio a calificar']) sv.add(r['Servicio a calificar']); if(r['Entidad convenio']) en.add(r['Entidad convenio']); });
+  const opt = v => `<option value="${v}">${v}</option>`;
+  document.getElementById('agenteFiltro').innerHTML   = '<option value="">Todos</option>'  + [...ag].sort().map(opt).join('');
+  document.getElementById('servicioFiltro').innerHTML = '<option value="">Todos</option>'  + [...sv].sort().map(opt).join('');
+  document.getElementById('entidadFiltro').innerHTML  = '<option value="">Todas</option>' + [...en].sort().map(opt).join('');
+}
+
+function limpiarFiltros() {
+  ['fechaInicio','fechaFin'].forEach(id => document.getElementById(id).value = '');
+  ['agenteFiltro','servicioFiltro','entidadFiltro'].forEach(id => document.getElementById(id).value = '');
+  aplicarFiltros();
+}
+
+function filtrarDatos() {
+  const fi=document.getElementById('fechaInicio').value, ff=document.getElementById('fechaFin').value;
+  const ag=document.getElementById('agenteFiltro').value, sv=document.getElementById('servicioFiltro').value, en=document.getElementById('entidadFiltro').value;
+  return datosOriginales.filter(r => {
+    const f=r['Fecha']||'';
+    return (!fi||f>=fi)&&(!ff||f<=ff)&&(!ag||r['Nombre']===ag)&&(!sv||r['Servicio a calificar']===sv)&&(!en||r['Entidad convenio']===en);
+  });
+}
+
+function aplicarFiltros() {
+  const data = filtrarDatos();
+  actualizarKPIs(data);
+  renderTabla(data);
+  renderBar('chartAgente',   data, 'Nombre',              'Por Agente');
+  renderBar('chartServicio', data, 'Servicio a calificar','Por Servicio');
+  renderBar('chartEntidad',  data, 'Entidad convenio',    'Por Entidad');
+  renderPieSatisfaccion(data);
+  renderPreguntas(data);
+  const partes = [];
+  const fi=document.getElementById('fechaInicio').value, ff=document.getElementById('fechaFin').value;
+  const ag=document.getElementById('agenteFiltro').value, sv=document.getElementById('servicioFiltro').value, en=document.getElementById('entidadFiltro').value;
+  if(fi||ff) partes.push(`${fi||'…'} → ${ff||'…'}`);
+  if(ag) partes.push(`Agente: ${ag}`); if(sv) partes.push(sv); if(en) partes.push(en);
+  document.getElementById('filtroTexto').textContent = partes.join(' · ');
+}
+
+// ── KPIs ───────────────────────────────────────────────────────
+function actualizarKPIs(data) {
+  document.getElementById('kpiTotal').textContent = data.length || '—';
+  document.getElementById('badgeTotal').textContent = data.length;
+  const pregs = Object.keys(data[0]||{}).filter(k=>k.trim().startsWith('¿'));
+  if (pregs.length && data.length) {
+    const pos = ['muy satisfecho','satisfecho','excelente','muy bueno','bueno','siempre','totalmente','completamente'];
+    let ok=0, tot=0;
+    data.forEach(r => pregs.forEach(p => { const v=(r[p]||'').toLowerCase(); if(v){tot++;if(pos.some(w=>v.includes(w)))ok++;} }));
+    document.getElementById('kpiSat').textContent = tot ? Math.round(ok/tot*100)+'%' : '—';
+  } else document.getElementById('kpiSat').textContent = '—';
+  document.getElementById('kpiServ').textContent = new Set(data.map(r=>r['Servicio a calificar']).filter(Boolean)).size || '—';
+  const fechas = data.map(r=>r['Fecha']).filter(f=>f&&f.length===10).sort();
+  if (fechas.length) {
+    const fmt = d => new Date(d+'T00:00:00').toLocaleDateString('es-CO',{month:'short',day:'numeric'});
+    document.getElementById('kpiPer').textContent = fechas.length>1 ? `${fmt(fechas[0])} – ${fmt(fechas[fechas.length-1])}` : fmt(fechas[0]);
+  } else document.getElementById('kpiPer').textContent = '—';
+}
+
+// ── Charts ─────────────────────────────────────────────────────
+function renderBar(id, data, campo, label) {
+  const res={};
+  data.forEach(r => { const v=r[campo]||'Sin datos'; res[v]=(res[v]||0)+1; });
+  const labels=Object.keys(res), vals=Object.values(res);
+  const ctx=document.getElementById(id).getContext('2d');
+  if(charts[id]) charts[id].destroy();
+  charts[id] = new Chart(ctx, {
+    type:'bar',
+    data:{labels, datasets:[{label, data:vals, backgroundColor:labels.map((_,i)=>PALETA[i%PALETA.length]), borderRadius:6, borderWidth:0}]},
+    options:{responsive:true, plugins:{legend:{display:false}}, scales:{x:{grid:{display:false},ticks:{font:{size:11}}}, y:{beginAtZero:true,grid:{color:'rgba(128,128,128,0.1)'},ticks:{precision:0}}}}
+  });
+}
+
+function renderPieSatisfaccion(data) {
+  const pregs=Object.keys(data[0]||{}).filter(k=>k.trim().startsWith('¿')), res={};
+  data.forEach(r => pregs.forEach(p => { const v=(r[p]||'').trim(); if(v) res[v]=(res[v]||0)+1; }));
+  const labels=Object.keys(res), vals=Object.values(res);
+  const ctx=document.getElementById('chartPie').getContext('2d');
+  if(charts['chartPie']) charts['chartPie'].destroy();
+  if(!labels.length) return;
+  charts['chartPie'] = new Chart(ctx, {
+    type:'doughnut',
+    data:{labels, datasets:[{data:vals, backgroundColor:PALETA, borderWidth:2, borderColor:'var(--card-bg)'}]},
+    options:{responsive:true, cutout:'62%', plugins:{legend:{position:'bottom', labels:{font:{size:10},padding:8}}}}
+  });
+}
+
+function renderPreguntas(data) {
+  if(!data.length) return;
+  const pregs=Object.keys(data[0]).filter(k=>k.trim().startsWith('¿'));
+  const grid=document.getElementById('gridPreguntas');
+  grid.innerHTML='';
+  pregs.forEach((p,i) => {
+    const res={};
+    data.forEach(r => { const v=(r[p]||'').trim(); if(v) res[v]=(res[v]||0)+1; });
+    if(!Object.keys(res).length) return;
+    const col=document.createElement('div');
+    col.className='col-md-6 col-xl-4';
+    col.innerHTML=`<div class="card h-100"><div class="section-label" style="font-size:.65rem;line-height:1.35">${p}</div><canvas id="pc_${i}" style="max-height:190px"></canvas><ul class="list-unstyled mt-2 mb-0" style="font-size:.72rem;color:var(--text-muted)">${Object.entries(res).map(([k,v])=>`<li><strong>${v}</strong> → ${k}</li>`).join('')}</ul></div>`;
+    grid.appendChild(col);
+    new Chart(document.getElementById(`pc_${i}`), {
+      type:'pie',
+      data:{labels:Object.keys(res), datasets:[{data:Object.values(res), backgroundColor:PALETA, borderWidth:2, borderColor:'var(--card-bg)'}]},
+      options:{responsive:true, plugins:{legend:{position:'bottom', labels:{font:{size:10},padding:6}}}}
+    });
+  });
+}
+
+// ── Tabla ──────────────────────────────────────────────────────
+function renderTabla(data) {
+  const t=document.getElementById('tablaDatos');
+  if(!data.length){t.querySelector('thead').innerHTML='<tr><th>Sin datos</th></tr>';t.querySelector('tbody').innerHTML='';return;}
+  const cols=Object.keys(data[0]);
+  t.querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  t.querySelector('tbody').innerHTML=data.map(r=>'<tr>'+cols.map(c=>`<td>${r[c]||''}</td>`).join('')+'</tr>').join('');
+}
+
+function exportarTabla() {
+  if(!datosOriginales.length) return alert('No hay datos para exportar.');
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datosOriginales), 'Datos');
+  XLSX.writeFile(wb, 'encuesta_satisfaccion.xlsx');
+}
+
+// ── UI ─────────────────────────────────────────────────────────
+function toggleUserMenu() {
+  document.getElementById('userDropdown').classList.toggle('open');
+}
+
+function toggleSeccion(secId, btnId) {
+  const sec=document.getElementById(secId), btn=document.getElementById(btnId);
+  const visible=sec.style.display!=='none';
+  sec.style.display=visible?'none':'block';
+  btn.innerHTML=visible?'<i class="bi bi-chevron-down me-1"></i>Mostrar':'<i class="bi bi-chevron-up me-1"></i>Ocultar';
+  localStorage.setItem('sec_'+secId,!visible);
+  if(!visible) setTimeout(()=>{Object.values(charts).forEach(c=>{try{c.resize();}catch{}});},50);
+}
+
+function restoreSecciones() {
+  ['secPreguntas','secTabla'].forEach(id => {
+    if(localStorage.getItem('sec_'+id)==='true'){
+      const sec=document.getElementById(id);
+      const btnId=id==='secPreguntas'?'btnTogglePreg':'btnToggleTabla';
+      sec.style.display='block';
+      document.getElementById(btnId).innerHTML='<i class="bi bi-chevron-up me-1"></i>Ocultar';
+    }
+  });
+}
+
+function mostrarLoader(v) { document.getElementById('loader').style.display=v?'flex':'none'; }
+
+function mostrarError(msg) {
+  const el=document.getElementById('loginError');
+  el.textContent=msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 6000);
+}
+
+function toggleTheme() {
+  const dark=document.documentElement.classList.toggle('dark');
+  document.getElementById('btnTheme').innerHTML=dark?'<i class="bi bi-sun-fill"></i>':'<i class="bi bi-moon-fill"></i>';
+  localStorage.setItem('darkMode',dark);
+}
+
+function restoreTheme() {
+  if(localStorage.getItem('darkMode')==='true'){
+    document.documentElement.classList.add('dark');
+    document.getElementById('btnTheme').innerHTML='<i class="bi bi-sun-fill"></i>';
+  }
+}
+
+// ── Crypto ─────────────────────────────────────────────────────
+async function sha256(text) {
+  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Expone sha256 en consola para que el admin pueda generar nuevos hashes
+window.sha256 = sha256;
 </script>
 </body>
 </html>
